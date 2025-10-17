@@ -5,7 +5,6 @@ from django.utils import timezone
 from datetime import timedelta
 from simple_history.models import HistoricalRecords
 
-
 # ===============================
 #  USER MANAGEMENT
 # ===============================
@@ -38,15 +37,14 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-
 # Role Model
 class Role(models.Model):
     ROLE_CATEGORIES = [
         ("admin", "Admin"),
         ("client", "Client"),
         ("manager", "Manager"),
-        ("chef", "Chef"),
         ("waiter", "Waiter"),
+        ("chef", "Chef"),
         ("customer", "Customer"),
     ]
 
@@ -61,7 +59,6 @@ class Role(models.Model):
 
     class Meta:
         db_table = 'role'
-
 
 # User Model
 class Users(AbstractBaseUser, PermissionsMixin):
@@ -97,7 +94,6 @@ class Users(AbstractBaseUser, PermissionsMixin):
     class Meta:
         db_table = 'users'
 
-
 # User Role Assignment (Many-to-Many)
 class UserRole(models.Model):
     user = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="user_roles")
@@ -113,7 +109,6 @@ class UserRole(models.Model):
     class Meta:
         db_table = 'user_role'
         unique_together = ("user", "role")
-
 
 # ===============================
 #  RESTAURANT & SUBSCRIPTION SYSTEM
@@ -140,7 +135,6 @@ class Restaurant(models.Model):
     class Meta:
         db_table = "restaurant"
 
-
 # Subscription Plan (Defines pricing & duration)
 class SubscriptionPlan(models.Model):
     PLAN_CHOICES = [
@@ -163,7 +157,6 @@ class SubscriptionPlan(models.Model):
 
     class Meta:
         db_table = "subscription_plan"
-
 
 # Restaurant Subscription (Tracks each restaurant’s active plan)
 class RestaurantSubscription(models.Model):
@@ -194,7 +187,6 @@ class RestaurantSubscription(models.Model):
 
     class Meta:
         db_table = "restaurant_subscription"
-
 
 # Payment History
 class PaymentTransaction(models.Model):
