@@ -38,4 +38,4 @@ class UserProfileSerializer(serializers.ModelSerializer):
     profile_image = serializers.ImageField(required=False, allow_null=True) 
     class Meta:
         model = Users
-        fields = ['first_name', 'last_name', 'username', 'email', 'phone', 'profile_image', 'date_of_birth','address','city','district','state','pincode','role_id']
+        fields = ['first_name', 'last_name', 'username', 'email', 'phone', 'profile_image', 'date_of_birth','address','role_id']

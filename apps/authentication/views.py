@@ -64,6 +64,8 @@ class LoginView(generics.GenericAPIView):
                 'access': str(refresh.access_token),
                 'message': 'Login successful',
                 'role': user.role.role_category if user.role else None, 
+                'user_id': user.id,
+                'username': user.username,
             }, status=status.HTTP_200_OK)
         return Response({'error': 'Invalid Credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
