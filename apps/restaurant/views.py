@@ -49,20 +49,20 @@ def product_item_delete(request, id):
 # ============================================================
 # MAIN CATEGORY
 # ============================================================
-@api_view(['GET'])
-def main_category_list(request):
-    categories = MainCategory.objects.all()
-    serializer = MainCategorySerializer(categories, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def main_category_create(request):
-    serializer = MainCategorySerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Main category created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-    return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+def main_category_list_create(request):
+    if request.method == 'GET':
+        categories = MainCategory.objects.all()
+        serializer = MainCategorySerializer(categories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        serializer = MainCategorySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response( {"message": "Main category created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED )
+        return Response( {"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST )
 
 @api_view(['GET'])
 def main_category_detail(request, id):
@@ -90,20 +90,20 @@ def main_category_delete(request, id):
 # ============================================================
 # SUB CATEGORY
 # ============================================================
-@api_view(['GET'])
-def sub_category_list(request):
-    categories = SubCategory.objects.all()
-    serializer = SubCategorySerializer(categories, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def sub_category_create(request):
-    serializer = SubCategorySerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Sub category created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-    return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+def sub_category_list_create(request):
+    if request.method == 'GET':
+        categories = SubCategory.objects.all()
+        serializer = SubCategorySerializer(categories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        serializer = SubCategorySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Sub category created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def sub_category_detail(request, id):
@@ -131,15 +131,14 @@ def sub_category_delete(request, id):
 # ============================================================
 # PRODUCT IMAGES
 # ============================================================
-@api_view(['GET'])
-def product_image_list(request):
-    images = ProductImage.objects.all()
-    serializer = ProductImageSerializer(images, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def product_image_create(request):
+def product_image_list_create(request):
+    if request.method == 'GET':
+        images = ProductImage.objects.all()
+        serializer = ProductImageSerializer(images, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     serializer = ProductImageSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
@@ -162,20 +161,19 @@ def product_image_delete(request, id):
 # ============================================================
 # OFFERS
 # ============================================================
-@api_view(['GET'])
-def offer_list(request):
-    offers = Offer.objects.all()
-    serializer = OfferSerializer(offers, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def offer_create(request):
+def offer_list_create(request):
+    if request.method == 'GET':
+        offers = Offer.objects.all()
+        serializer = OfferSerializer(offers, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     serializer = OfferSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
         return Response({"message": "Offer created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-    return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST) 
 
 @api_view(['GET'])
 def offer_detail(request, id):
@@ -203,15 +201,14 @@ def offer_delete(request, id):
 # ============================================================
 # PRODUCT REVIEWS
 # ============================================================
-@api_view(['GET'])
-def product_review_list(request):
-    reviews = ProductReview.objects.all()
-    serializer = ProductReviewSerializer(reviews, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def product_review_create(request):
+def product_review_list_create(request):
+    if request.method == 'GET':
+        reviews = ProductReview.objects.all()
+        serializer = ProductReviewSerializer(reviews, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     serializer = ProductReviewSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
