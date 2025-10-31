@@ -11,8 +11,19 @@ class MainCategory(models.Model):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    display_order = models.PositiveIntegerField(default=0)
+    display_order = models.PositiveIntegerField(blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)
+
+    def save(self, *args, **kwargs):
+        if not self.display_order:
+            last = MainCategory.objects.aggregate(models.Max("display_order"))["display_order__max"] or 0
+            self.display_order = last + 1
+        else:
+            MainCategory.objects.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ["display_order"]
 
     def __str__(self):
         return self.name
@@ -22,9 +33,22 @@ class SubCategory(models.Model):
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    display_order = models.PositiveIntegerField(default=0)
+    display_order = models.PositiveIntegerField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        qs = SubCategory.objects.filter(main_category=self.main_category)
+        if not self.pk:
+            last_order = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
+            self.display_order = (self.display_order or last_order + 1)
+        else:
+            if self.display_order:
+                qs = qs.exclude(pk=self.pk)
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+        super().save(*args, **kwargs)
+
     class Meta:
         unique_together = ('main_category', 'name')
+        ordering = [ "display_order"]
 
     def __str__(self):
         return f"{self.main_category.name} → {self.name}"
@@ -59,26 +83,24 @@ VARIANT_CHOICES = [
     ('None', 'NONE'),
 ]
 UNIT_CHOICES = [
-    ('pcs', 'Pieces'),
     ('item', 'Item'),
-    ('lb', 'Pound'),
-    ('oz', 'Ounce'),
-    ('kg', 'Kilogram'),
-    ('g', 'Gram'),
+    ('pcs', 'Pieces'),
+    ('plate', 'Plate'),
+    ('bowl', 'Bowl'),
+    ('slice', 'Slice'),
+    ('pack', 'Pack'),
+    ('box', 'Box'),
     ('cup', 'Cup'),
-    ('tbsp', 'Tablespoon'),
-    ('tsp', 'Teaspoon'),
     ('ml', 'Millilitre'),
     ('l', 'Litre'),
-    ('fl oz', 'Fluid Ounce'),
-    ('pt', 'Pint'),
-    ('qt', 'Quart'),
-    ('gal', 'Gallon'),
+    ('g', 'Gram'),
+    ('kg', 'Kilogram'),
+    ('oz', 'Ounce'),
+    ('lb', 'Pound'),
     ('bottle', 'Bottle'),
     ('can', 'Can'),
     ('jar', 'Jar'),
-    ('pack', 'Pack'),
-    ('slice', 'Slice'),
+    ('None', 'None'),
 ]
 CURRENCY_CHOICES = [
     ('$', 'US Dollar ($)'),
@@ -97,7 +119,7 @@ class ProductItem(models.Model):
 
     variant_type = models.CharField(max_length=20, choices=VARIANT_CHOICES, default='None')
     quantity_value = models.FloatField(default=1.0, validators=[MinValueValidator(0.0)])
-    quantity_unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default='item')
+    quantity_unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default='None')
 
     price = models.DecimalField(max_digits=10, decimal_places=2)
     currency_symbol = models.CharField(max_length=10, choices=CURRENCY_CHOICES, default='$')
@@ -112,17 +134,42 @@ class ProductItem(models.Model):
     customizations = models.TextField(blank=True, null=True, help_text="Custom options or instructions")
     rating_avg = models.DecimalField(max_digits=3, decimal_places=1, default=0.0)
 
+    display_order = models.PositiveIntegerField(blank=True, null=True)
     created_by = models.ForeignKey(Users, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_products")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['display_order', 'id']
+
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        base_slug = slugify(self.name)
+        slug = base_slug
+        counter = 1
+        while ProductItem.objects.filter(slug=slug).exclude(id=self.id).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        self.slug = slug
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} - {self.quantity_value} {self.quantity_unit} ({self.currency_symbol}{self.price})"
+
+    @property
+    def main_image(self):
+        """
+        Return the main image URL automatically:
+        1. If ProductImage with is_main_image=True → return that
+        2. Else fallback to first ProductImage
+        3. Else return None
+        """
+        main_img = self.images.filter(is_main_image=True).first()
+        if main_img and main_img.image:
+            return main_img.image.url
+        first_img = self.images.first()
+        if first_img and first_img.image:
+            return first_img.image.url
+        return None
 
 # ============================================================
 # PRODUCT IMAGE MODEL

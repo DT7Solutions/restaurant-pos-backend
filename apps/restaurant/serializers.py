@@ -43,6 +43,7 @@ class OfferSerializer(serializers.ModelSerializer):
 # PRODUCT ITEM SERIALIZER
 # ============================================================
 class ProductItemSerializer(serializers.ModelSerializer):
+    main_image = serializers.SerializerMethodField()
     # main_category = MainCategorySerializer(read_only=True)
     # sub_category = SubCategorySerializer(read_only=True)
     # created_by = UserBasicSerializer(read_only=True)
@@ -67,6 +68,9 @@ class ProductItemSerializer(serializers.ModelSerializer):
     #     write_only=True,
     #     help_text="Select applicable offer IDs"
     # )
+    
+    def get_main_image(self, obj):
+        return obj.main_image
 
     class Meta:
         model = ProductItem

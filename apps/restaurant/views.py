@@ -7,6 +7,31 @@ from .models import *
 from .serializers import *
 
 # ============================================================
+# PRODUCT CHOICES
+# ============================================================
+@api_view(['GET'])
+def get_product_choices(request):
+    try:
+        variant_choices = [
+            {"value": v[0], "label": v[1]} for v in ProductItem._meta.get_field('variant_type').choices
+        ]
+        unit_choices = [
+            {"value": v[0], "label": v[1]} for v in ProductItem._meta.get_field('quantity_unit').choices
+        ]
+        currency_choices = [
+            {"value": v[0], "label": v[1]} for v in ProductItem._meta.get_field('currency_symbol').choices
+        ]
+
+        return Response({
+            "variant_choices": variant_choices,
+            "unit_choices": unit_choices,
+            "currency_choices": currency_choices,
+        })
+    except Exception as e:
+        print("Error in get_product_choices:", e)
+        return Response({"error": str(e)}, status=500)
+
+# ============================================================
 # PRODUCT ITEMS
 # ============================================================
 @api_view(['GET', 'POST'])
