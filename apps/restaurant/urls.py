@@ -18,10 +18,6 @@ urlpatterns = [
     path('sub-categories/<int:id>/', sub_category_detail, name='sub_category_detail'),
     path('sub-categories/update/<int:id>/', sub_category_update, name='sub_category_update'),
     path('sub-categories/delete/<int:id>/', sub_category_delete, name='sub_category_delete'),
-    # ================== PRODUCT IMAGES ==================
-    path('product-images/', product_image_list_create, name='product_image_list_create'),
-    path('product-images/<int:id>/', product_image_detail, name='product_image_detail'),
-    path('product-images/delete/<int:id>/', product_image_delete, name='product_image_delete'),
     # ================== OFFERS ==================
     path('offers/', offer_list_create, name='offer_list_create'),
     path('offers/<int:id>/', offer_detail, name='offer_detail'),

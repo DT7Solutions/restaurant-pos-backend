@@ -42,51 +42,34 @@ class OfferSerializer(serializers.ModelSerializer):
 # ============================================================
 # PRODUCT ITEM SERIALIZER
 # ============================================================
-class ProductItemSerializer(serializers.ModelSerializer):
-    main_image = serializers.SerializerMethodField()
-    # main_category = MainCategorySerializer(read_only=True)
-    # sub_category = SubCategorySerializer(read_only=True)
-    # created_by = UserBasicSerializer(read_only=True)
-    # offers_details = OfferSerializer(source='offers', many=True, read_only=True)
+from rest_framework import serializers
+from .models import ProductItem
 
-    # main_category_id = serializers.PrimaryKeyRelatedField(
-    #     queryset=MainCategory.objects.all(),
-    #     source='main_category',
-    #     write_only=True,
-    #     help_text="Select the main category ID"
-    # )
-    # sub_category_id = serializers.PrimaryKeyRelatedField(
-    #     queryset=SubCategory.objects.all(),
-    #     source='sub_category',
-    #     write_only=True,
-    #     help_text="Select the sub category ID"
-    # )
-    # offers = serializers.PrimaryKeyRelatedField(
-    #     queryset=Offer.objects.all(),
-    #     many=True,
-    #     required=False,
-    #     write_only=True,
-    #     help_text="Select applicable offer IDs"
-    # )
-    
-    def get_main_image(self, obj):
-        return obj.main_image
+class ProductItemSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True, allow_empty_file=True)
 
     class Meta:
         model = ProductItem
         fields = '__all__'
-        read_only_fields = [ 'id', 'slug', 'created_by', 'created_at', 'updated_at', 'main_category_id', 'sub_category_id', 'offers_details' ]
 
-# ============================================================
-# PRODUCT IMAGE SERIALIZER
-# ============================================================
-class ProductImageSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image:
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return None
 
-    class Meta:
-        model = ProductImage
-        fields = '__all__'
-        read_only_fields = ['id', 'product_name']
+    def update(self, instance, validated_data):
+        if 'image' in validated_data:
+            image = validated_data.get('image')
+            if image in [None, '', 'null']:
+                if instance.image:
+                    instance.image.delete(save=False)
+                instance.image = None
+            else:
+                instance.image = image
+
+        return super().update(instance, validated_data)
 
 # ============================================================
 # PRODUCT REVIEW SERIALIZER

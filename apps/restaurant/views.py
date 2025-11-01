@@ -38,30 +38,36 @@ def get_product_choices(request):
 @permission_classes([IsAuthenticated])
 def product_items_list_create(request):
     if request.method == 'GET':
-        products = ProductItem.objects.all().select_related('main_category', 'sub_category').prefetch_related('offers', 'images')
-        serializer = ProductItemSerializer(products, many=True)
+        products = ProductItem.objects.all().select_related('main_category', 'sub_category').prefetch_related('offers')
+        serializer = ProductItemSerializer(products, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    serializer = ProductItemSerializer(data=request.data)
+    serializer = ProductItemSerializer(data=request.data, context={'request': request})
     if serializer.is_valid():
         serializer.save(created_by=request.user)
-        return Response({"message": "Product created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"message": "Product created successfully", "data": serializer.data},
+            status=status.HTTP_201_CREATED
+        )
     return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def product_item_detail(request, id):
     product = get_object_or_404(ProductItem, id=id)
-    serializer = ProductItemSerializer(product)
+    serializer = ProductItemSerializer(product, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def product_item_update(request, id):
     product = get_object_or_404(ProductItem, id=id)
-    serializer = ProductItemSerializer(product, data=request.data)
+    serializer = ProductItemSerializer(product, data=request.data, partial=True, context={'request': request})
     if serializer.is_valid():
         serializer.save()
-        return Response({"message": "Product updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Product updated successfully", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
     return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
@@ -152,36 +158,6 @@ def sub_category_delete(request, id):
     category = get_object_or_404(SubCategory, id=id)
     category.delete()
     return Response({"message": "Sub category deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
-
-# ============================================================
-# PRODUCT IMAGES
-# ============================================================
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def product_image_list_create(request):
-    if request.method == 'GET':
-        images = ProductImage.objects.all()
-        serializer = ProductImageSerializer(images, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    serializer = ProductImageSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Product image added successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-    return Response({"message": "Validation failed", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['GET'])
-def product_image_detail(request, id):
-    image = get_object_or_404(ProductImage, id=id)
-    serializer = ProductImageSerializer(image)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-@api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
-def product_image_delete(request, id):
-    image = get_object_or_404(ProductImage, id=id)
-    image.delete()
-    return Response({"message": "Product image deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 # ============================================================
 # OFFERS

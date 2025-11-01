@@ -11,7 +11,7 @@ class MainCategory(models.Model):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    display_order = models.PositiveIntegerField(blank=True, null=True)
+    display_order = models.PositiveIntegerField(blank=True, null=True, unique=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     def save(self, *args, **kwargs):
@@ -91,6 +91,7 @@ UNIT_CHOICES = [
     ('pack', 'Pack'),
     ('box', 'Box'),
     ('cup', 'Cup'),
+    ('glass', 'Glass'),
     ('ml', 'Millilitre'),
     ('l', 'Litre'),
     ('g', 'Gram'),
@@ -134,10 +135,13 @@ class ProductItem(models.Model):
     customizations = models.TextField(blank=True, null=True, help_text="Custom options or instructions")
     rating_avg = models.DecimalField(max_digits=3, decimal_places=1, default=0.0)
 
-    display_order = models.PositiveIntegerField(blank=True, null=True)
+    display_order = models.PositiveIntegerField(blank=True, null=True, unique=True)
     created_by = models.ForeignKey(Users, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_products")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
+    image = models.ImageField(upload_to='menu_items/', blank=True, null=True)
+    image_alt = models.CharField(max_length=150, blank=True, null=True, help_text="Alternative text for accessibility/SEO")
 
     class Meta:
         ordering = ['display_order', 'id']
@@ -150,41 +154,28 @@ class ProductItem(models.Model):
             slug = f"{base_slug}-{counter}"
             counter += 1
         self.slug = slug
+
+        # Rename image before saving (if uploaded)
+        if self.image and not self.image.name.startswith(f"menu_items/{self.slug}"):
+            ext = self.image.name.split('.')[-1]
+            self.image.name = f"menu_items/{self.slug}.{ext}"
+
+        # Auto-assign display_order if missing
+        if not self.display_order:
+            last = ProductItem.objects.aggregate(models.Max("display_order"))["display_order__max"] or 0
+            self.display_order = last + 1
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} - {self.quantity_value} {self.quantity_unit} ({self.currency_symbol}{self.price})"
 
     @property
-    def main_image(self):
-        """
-        Return the main image URL automatically:
-        1. If ProductImage with is_main_image=True → return that
-        2. Else fallback to first ProductImage
-        3. Else return None
-        """
-        main_img = self.images.filter(is_main_image=True).first()
-        if main_img and main_img.image:
-            return main_img.image.url
-        first_img = self.images.first()
-        if first_img and first_img.image:
-            return first_img.image.url
+    def image_url(self):
+        """Return main product image URL or None"""
+        if self.image:
+            return self.image.url
         return None
-
-# ============================================================
-# PRODUCT IMAGE MODEL
-# ============================================================
-class ProductImage(models.Model):
-    product = models.ForeignKey(ProductItem, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='menu_items/')
-    alt_text = models.CharField(max_length=120, blank=True, null=True)
-    display_order = models.PositiveIntegerField(default=0)
-    is_main_image = models.BooleanField(default=False)
-
-    def __str__(self):
-        return f"{self.product.name} - Image {self.display_order}"
-    class Meta:
-        ordering = ['display_order']
 
 # ============================================================
 # PRODUCT REVIEW MODEL
