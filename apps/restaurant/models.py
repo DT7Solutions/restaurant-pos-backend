@@ -23,7 +23,6 @@ class MainCategory(models.Model):
                 self.display_order = last + 1
             else:
                 active_qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
-
         else:
             if self.display_order:
                 MainCategory.objects.filter( is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
@@ -36,7 +35,7 @@ class MainCategory(models.Model):
         ProductItem.objects.filter(main_category=self).update(is_active=self.is_active)
 
     class Meta:
-        ordering = ["display_order"]
+        ordering = ["display_order", "id"]
 
     def __str__(self):
         return self.name
@@ -51,7 +50,6 @@ class SubCategory(models.Model):
     def save(self, *args, **kwargs):
         qs = SubCategory.objects.filter(main_category=self.main_category, is_active=True).exclude(pk=self.pk)
 
-        # Only manage display order if both main_category and subcategory are active
         if self.main_category.is_active and self.is_active:
             if not self.display_order:
                 last = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
@@ -68,12 +66,12 @@ class SubCategory(models.Model):
         # --- Cascade active/inactive to related products ---
         self.products.update(is_active=self.is_active)
 
-        class Meta:
-            unique_together = ('main_category', 'name')
-            ordering = [ "display_order"]
+    class Meta:
+        unique_together = ("main_category", "name")
+        ordering = ["display_order", "id"]
 
-        def __str__(self):
-            return f"{self.main_category.name} → {self.name}"
+    def __str__(self):
+        return f"{self.main_category.name} → {self.name}"
 
 # ============================================================
 # OFFERS MODEL
@@ -157,7 +155,7 @@ class ProductItem(models.Model):
     customizations = models.TextField(blank=True, null=True, help_text="Custom options or instructions")
     rating_avg = models.DecimalField(max_digits=3, decimal_places=1, default=0.0)
 
-    display_order = models.PositiveIntegerField(blank=True, null=True, unique=True)
+    display_order = models.PositiveIntegerField(blank=True, null=True)
     created_by = models.ForeignKey(Users, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_products")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -188,10 +186,22 @@ class ProductItem(models.Model):
             ext = self.image.name.split('.')[-1]
             self.image.name = f"menu_items/{self.slug}.{ext}"
 
-        # Auto display order if active
-        if self.is_active and not self.display_order:
-            last = ProductItem.objects.aggregate(models.Max("display_order"))["display_order__max"] or 0
-            self.display_order = last + 1
+        # Handle display order (per sub_category or main_category)
+        if self.is_active:
+            qs = ProductItem.objects.filter(main_category=self.main_category, is_active=True)
+            if self.sub_category:
+                qs = qs.filter(sub_category=self.sub_category)
+            qs = qs.exclude(pk=self.pk)
+
+            if not self.display_order:
+                last = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
+                self.display_order = last + 1
+            else:
+                qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
+        else:
+            if self.display_order:
+                ProductItem.objects.filter( main_category=self.main_category, is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
+            self.display_order = None
 
         super().save(*args, **kwargs)
 
