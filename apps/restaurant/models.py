@@ -11,16 +11,29 @@ class MainCategory(models.Model):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    display_order = models.PositiveIntegerField(blank=True, null=True, unique=True)
+    display_order = models.PositiveIntegerField(blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     def save(self, *args, **kwargs):
-        if not self.display_order:
-            last = MainCategory.objects.aggregate(models.Max("display_order"))["display_order__max"] or 0
-            self.display_order = last + 1
+        active_qs = MainCategory.objects.filter(is_active=True).exclude(pk=self.pk)
+
+        if self.is_active:
+            if not self.display_order:
+                last = active_qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
+                self.display_order = last + 1
+            else:
+                active_qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
+
         else:
-            MainCategory.objects.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+            if self.display_order:
+                MainCategory.objects.filter( is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
+            self.display_order = None
         super().save(*args, **kwargs)
+
+        # --- Cascade active/inactive status ---
+        self.subcategories.update(is_active=self.is_active)
+        from apps.restaurant.models import ProductItem
+        ProductItem.objects.filter(main_category=self).update(is_active=self.is_active)
 
     class Meta:
         ordering = ["display_order"]
@@ -36,22 +49,31 @@ class SubCategory(models.Model):
     display_order = models.PositiveIntegerField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        qs = SubCategory.objects.filter(main_category=self.main_category)
-        if not self.pk:
-            last_order = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
-            self.display_order = (self.display_order or last_order + 1)
+        qs = SubCategory.objects.filter(main_category=self.main_category, is_active=True).exclude(pk=self.pk)
+
+        # Only manage display order if both main_category and subcategory are active
+        if self.main_category.is_active and self.is_active:
+            if not self.display_order:
+                last = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
+                self.display_order = last + 1
+            else:
+                qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
         else:
             if self.display_order:
-                qs = qs.exclude(pk=self.pk)
-                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+                SubCategory.objects.filter( main_category=self.main_category, is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
+            self.display_order = None
+
         super().save(*args, **kwargs)
 
-    class Meta:
-        unique_together = ('main_category', 'name')
-        ordering = [ "display_order"]
+        # --- Cascade active/inactive to related products ---
+        self.products.update(is_active=self.is_active)
 
-    def __str__(self):
-        return f"{self.main_category.name} → {self.name}"
+        class Meta:
+            unique_together = ('main_category', 'name')
+            ordering = [ "display_order"]
+
+        def __str__(self):
+            return f"{self.main_category.name} → {self.name}"
 
 # ============================================================
 # OFFERS MODEL
@@ -147,6 +169,12 @@ class ProductItem(models.Model):
         ordering = ['display_order', 'id']
 
     def save(self, *args, **kwargs):
+        # Auto-disable if parent inactive
+        if (self.sub_category and not self.sub_category.is_active) or not self.main_category.is_active:
+            self.is_active = False
+            self.display_order = None
+
+        # Slug generation
         base_slug = slugify(self.name)
         slug = base_slug
         counter = 1
@@ -155,13 +183,13 @@ class ProductItem(models.Model):
             counter += 1
         self.slug = slug
 
-        # Rename image before saving (if uploaded)
+        # Rename image for SEO-friendly name
         if self.image and not self.image.name.startswith(f"menu_items/{self.slug}"):
             ext = self.image.name.split('.')[-1]
             self.image.name = f"menu_items/{self.slug}.{ext}"
 
-        # Auto-assign display_order if missing
-        if not self.display_order:
+        # Auto display order if active
+        if self.is_active and not self.display_order:
             last = ProductItem.objects.aggregate(models.Max("display_order"))["display_order__max"] or 0
             self.display_order = last + 1
 
