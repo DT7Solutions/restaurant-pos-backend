@@ -15,17 +15,15 @@ class MainCategory(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     def save(self, *args, **kwargs):
-        active_qs = MainCategory.objects.filter(is_active=True).exclude(pk=self.pk)
-
+        qs = MainCategory.objects.filter(is_active=True).exclude(pk=self.pk)
         if self.is_active:
             if not self.display_order:
-                last = active_qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
-                self.display_order = last + 1
+                self.display_order = (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
             else:
-                active_qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
         else:
             if self.display_order:
-                MainCategory.objects.filter( is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
+                qs.filter(display_order__gt=self.display_order).update(display_order=models.F("display_order") - 1)
             self.display_order = None
         super().save(*args, **kwargs)
 
@@ -49,18 +47,15 @@ class SubCategory(models.Model):
 
     def save(self, *args, **kwargs):
         qs = SubCategory.objects.filter(main_category=self.main_category, is_active=True).exclude(pk=self.pk)
-
         if self.main_category.is_active and self.is_active:
             if not self.display_order:
-                last = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
-                self.display_order = last + 1
+                self.display_order = (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
             else:
-                qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
         else:
             if self.display_order:
-                SubCategory.objects.filter( main_category=self.main_category, is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
+                qs.filter(display_order__gt=self.display_order).update(display_order=models.F("display_order") - 1)
             self.display_order = None
-
         super().save(*args, **kwargs)
 
         # --- Cascade active/inactive to related products ---
@@ -167,12 +162,13 @@ class ProductItem(models.Model):
         ordering = ['display_order', 'id']
 
     def save(self, *args, **kwargs):
-        # Auto-disable if parent inactive
-        if (self.sub_category and not self.sub_category.is_active) or not self.main_category.is_active:
+        # Skip saving if parent category or subcategory inactive
+        if not self.main_category.is_active or (self.sub_category and not self.sub_category.is_active):
             self.is_active = False
             self.display_order = None
+            return
 
-        # Slug generation
+        # Generate unique slug
         base_slug = slugify(self.name)
         slug = base_slug
         counter = 1
@@ -181,28 +177,26 @@ class ProductItem(models.Model):
             counter += 1
         self.slug = slug
 
-        # Rename image for SEO-friendly name
+        # SEO-friendly image rename
         if self.image and not self.image.name.startswith(f"menu_items/{self.slug}"):
             ext = self.image.name.split('.')[-1]
             self.image.name = f"menu_items/{self.slug}.{ext}"
 
-        # Handle display order (per sub_category or main_category)
+        # Display order handling
+        qs = ProductItem.objects.filter(main_category=self.main_category, is_active=True)
+        if self.sub_category:
+            qs = qs.filter(sub_category=self.sub_category)
+        qs = qs.exclude(pk=self.pk)
         if self.is_active:
-            qs = ProductItem.objects.filter(main_category=self.main_category, is_active=True)
-            if self.sub_category:
-                qs = qs.filter(sub_category=self.sub_category)
-            qs = qs.exclude(pk=self.pk)
-
             if not self.display_order:
                 last = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
                 self.display_order = last + 1
             else:
-                qs.filter(display_order__gte=self.display_order).update( display_order=models.F("display_order") + 1 )
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
         else:
             if self.display_order:
-                ProductItem.objects.filter( main_category=self.main_category, is_active=True, display_order__gt=self.display_order ).update(display_order=models.F("display_order") - 1)
+                qs.filter(display_order__gt=self.display_order).update(display_order=models.F("display_order") - 1)
             self.display_order = None
-
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -210,10 +204,7 @@ class ProductItem(models.Model):
 
     @property
     def image_url(self):
-        """Return main product image URL or None"""
-        if self.image:
-            return self.image.url
-        return None
+        return self.image.url if self.image else None
 
 # ============================================================
 # PRODUCT REVIEW MODEL
