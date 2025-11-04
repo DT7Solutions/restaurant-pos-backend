@@ -16,20 +16,24 @@ class MainCategory(models.Model):
 
     def save(self, *args, **kwargs):
         qs = MainCategory.objects.filter(is_active=True).exclude(pk=self.pk)
-        if self.is_active:
-            if not self.display_order:
-                self.display_order = (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
-            else:
-                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
-        else:
-            if self.display_order:
-                qs.filter(display_order__gt=self.display_order).update(display_order=models.F("display_order") - 1)
+        old = MainCategory.objects.filter(pk=self.pk).first() if self.pk else None
+        if not self.is_active:
+            if old and old.is_active and old.display_order: qs.filter(display_order__gt=old.display_order).update(display_order=models.F("display_order") - 1)
             self.display_order = None
+        else:
+            if not old or not old.is_active:
+                self.display_order = self.display_order or (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+            elif old.display_order != self.display_order:
+                if self.display_order > old.display_order:
+                    qs.filter(display_order__gt=old.display_order, display_order__lte=self.display_order).update(display_order=models.F("display_order") - 1)
+                else:
+                    qs.filter(display_order__gte=self.display_order, display_order__lt=old.display_order).update(display_order=models.F("display_order") + 1)
         super().save(*args, **kwargs)
-
+        for i, o in enumerate(MainCategory.objects.filter(is_active=True).order_by("display_order", "id"), 1):
+            if o.display_order != i: MainCategory.objects.filter(pk=o.pk).update(display_order=i)
         # --- Cascade active/inactive status ---
         self.subcategories.update(is_active=self.is_active)
-        from apps.restaurant.models import ProductItem
         ProductItem.objects.filter(main_category=self).update(is_active=self.is_active)
 
     class Meta:
@@ -47,17 +51,22 @@ class SubCategory(models.Model):
 
     def save(self, *args, **kwargs):
         qs = SubCategory.objects.filter(main_category=self.main_category, is_active=True).exclude(pk=self.pk)
-        if self.main_category.is_active and self.is_active:
-            if not self.display_order:
-                self.display_order = (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
-            else:
-                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
-        else:
-            if self.display_order:
-                qs.filter(display_order__gt=self.display_order).update(display_order=models.F("display_order") - 1)
+        old = SubCategory.objects.filter(pk=self.pk).first() if self.pk else None
+        if not self.is_active:
+            if old and old.is_active and old.display_order: qs.filter(display_order__gt=old.display_order).update(display_order=models.F("display_order") - 1)
             self.display_order = None
+        else:
+            if not old or not old.is_active:
+                self.display_order = self.display_order or (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+            elif old.display_order != self.display_order:
+                if self.display_order > old.display_order:
+                    qs.filter(display_order__gt=old.display_order, display_order__lte=self.display_order).update(display_order=models.F("display_order") - 1)
+                else:
+                    qs.filter(display_order__gte=self.display_order, display_order__lt=old.display_order).update(display_order=models.F("display_order") + 1)
         super().save(*args, **kwargs)
-
+        for i, o in enumerate(SubCategory.objects.filter(main_category=self.main_category, is_active=True).order_by("display_order", "id"), 1):
+            if o.display_order != i: SubCategory.objects.filter(pk=o.pk).update(display_order=i)
         # --- Cascade active/inactive to related products ---
         self.products.update(is_active=self.is_active)
 
@@ -164,17 +173,14 @@ class ProductItem(models.Model):
     def save(self, *args, **kwargs):
         # Skip saving if parent category or subcategory inactive
         if not self.main_category.is_active or (self.sub_category and not self.sub_category.is_active):
-            self.is_active = False
-            self.display_order = None
+            self.is_active, self.display_order = False, None
+            super().save(*args, **kwargs)
             return
 
         # Generate unique slug
-        base_slug = slugify(self.name)
-        slug = base_slug
-        counter = 1
+        base, slug, n = slugify(self.name), slugify(self.name), 1
         while ProductItem.objects.filter(slug=slug).exclude(id=self.id).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
+            slug, n = f"{base}-{n}", n + 1
         self.slug = slug
 
         # SEO-friendly image rename
@@ -187,17 +193,29 @@ class ProductItem(models.Model):
         if self.sub_category:
             qs = qs.filter(sub_category=self.sub_category)
         qs = qs.exclude(pk=self.pk)
-        if self.is_active:
-            if not self.display_order:
-                last = qs.aggregate(models.Max("display_order"))["display_order__max"] or 0
-                self.display_order = last + 1
-            else:
-                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
-        else:
-            if self.display_order:
-                qs.filter(display_order__gt=self.display_order).update(display_order=models.F("display_order") - 1)
+        old = ProductItem.objects.filter(pk=self.pk).first() if self.pk else None
+
+        if not self.is_active:
+            if old and old.is_active and old.display_order:
+                qs.filter(display_order__gt=old.display_order).update(display_order=models.F("display_order") - 1)
             self.display_order = None
+        else:
+            if not old or not old.is_active:
+                self.display_order = self.display_order or (qs.aggregate(models.Max("display_order"))["display_order__max"] or 0) + 1
+                qs.filter(display_order__gte=self.display_order).update(display_order=models.F("display_order") + 1)
+            elif old.display_order != self.display_order:
+                if self.display_order > old.display_order:
+                    qs.filter(display_order__gt=old.display_order, display_order__lte=self.display_order).update(display_order=models.F("display_order") - 1)
+                else:
+                    qs.filter(display_order__gte=self.display_order, display_order__lt=old.display_order).update(display_order=models.F("display_order") + 1)
         super().save(*args, **kwargs)
+        # resequence after save (no gaps)
+        q = ProductItem.objects.filter(main_category=self.main_category, is_active=True)
+        if self.sub_category:
+            q = q.filter(sub_category=self.sub_category)
+        for i, o in enumerate(q.order_by("display_order", "id"), 1):
+            if o.display_order != i:
+                ProductItem.objects.filter(pk=o.pk).update(display_order=i)
 
     def __str__(self):
         return f"{self.name} - {self.quantity_value} {self.quantity_unit} ({self.currency_symbol}{self.price})"

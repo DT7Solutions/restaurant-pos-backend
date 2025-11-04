@@ -42,9 +42,6 @@ class OfferSerializer(serializers.ModelSerializer):
 # ============================================================
 # PRODUCT ITEM SERIALIZER
 # ============================================================
-from rest_framework import serializers
-from .models import ProductItem
-
 class ProductItemSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     image = serializers.ImageField(required=False, allow_null=True, allow_empty_file=True)
