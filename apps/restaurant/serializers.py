@@ -56,16 +56,22 @@ class ProductItemSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
 
-    def update(self, instance, validated_data):
-        if 'image' in validated_data:
-            image = validated_data.get('image')
-            if image in [None, '', 'null']:
-                if instance.image:
-                    instance.image.delete(save=False)
-                instance.image = None
-            else:
-                instance.image = image
+    def create(self, validated_data):
+        if not validated_data.get('image_alt'):
+            validated_data['image_alt'] = validated_data.get('name', '')
+        return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        image = validated_data.get('image', None)
+        if image in [None, '', 'null']:
+            if instance.image:
+                instance.image.delete(save=False)
+            instance.image = None
+        elif image:
+            instance.image = image
+
+        if not validated_data.get('image_alt'):
+            validated_data['image_alt'] = validated_data.get('name', instance.name)
         return super().update(instance, validated_data)
 
 # ============================================================
