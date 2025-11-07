@@ -49,11 +49,12 @@ class ProductItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductItem
         fields = '__all__'
+        read_only_fields = ('image_url',)
 
     def get_image_url(self, obj):
         request = self.context.get('request')
         if obj.image:
-            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+            return request.build_absolute_uri(obj.image.url)
         return None
 
     def create(self, validated_data):
@@ -61,15 +62,18 @@ class ProductItemSerializer(serializers.ModelSerializer):
             validated_data['image_alt'] = validated_data.get('name', '')
         return super().create(validated_data)
 
+    def validate_image(self, value):
+        if value in [None, '', 'null']:
+            return None
+        return value
+
     def update(self, instance, validated_data):
         image = validated_data.get('image', None)
         if image in [None, '', 'null']:
             if instance.image:
                 instance.image.delete(save=False)
             instance.image = None
-        elif image:
-            instance.image = image
-
+            validated_data.pop('image', None)
         if not validated_data.get('image_alt'):
             validated_data['image_alt'] = validated_data.get('name', instance.name)
         return super().update(instance, validated_data)

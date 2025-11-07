@@ -116,8 +116,17 @@ class ProductItem(models.Model):
             slug, n = f"{base}-{n}", n + 1
         self.slug = slug
         if not self.image_alt: self.image_alt = self.name
-        if self.image and not self.image.name.startswith(f"menu_items/{self.slug}"):
-            ext = self.image.name.split('.')[-1]; self.image.name = f"menu_items/{self.slug}.{ext}"
+        if self.image:
+            ext = self.image.name.split('.')[-1].lower()
+            clean_name = f"{self.slug}.{ext}"
+            if not self.image.name.startswith("menu_items/"):
+                self.image.name = f"menu_items/{clean_name}"
+            else:
+                parts = self.image.name.split('/')
+                if len(parts) > 2 and parts[0] == "menu_items" and parts[1] == "menu_items":
+                    self.image.name = f"menu_items/{clean_name}"
+                elif parts[0] == "menu_items" and len(parts) == 2:
+                    self.image.name = f"menu_items/{clean_name}"
         if not self.display_order:
             qs = ProductItem.objects.filter(main_category=self.main_category)
             if self.sub_category: qs = qs.filter(sub_category=self.sub_category)

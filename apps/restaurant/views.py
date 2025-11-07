@@ -1,9 +1,11 @@
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Max
+from django.http import QueryDict
 from .models import *
 from .serializers import *
 
@@ -11,7 +13,7 @@ from .serializers import *
 # HELPER FUNCTION — assign display order automatically
 # ============================================================
 def assign_display_order(model, data, parent_field=None):
-    if not data.get("display_order"):
+    if not data.get("display_order") or data.get("display_order") == 0:
         qs = model.objects.all()
         if parent_field and data.get(parent_field):
             qs = qs.filter(**{parent_field: data[parent_field]})
@@ -115,17 +117,19 @@ def sub_category_delete(request, id):
 # ============================================================
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def product_items_list_create(request):
     if request.method == 'GET':
         qs = ProductItem.objects.select_related('main_category', 'sub_category').prefetch_related('offers')
         return Response(ProductItemSerializer(qs, many=True, context={'request': request}).data)
 
-    data = assign_display_order(ProductItem, request.data, 'sub_category')
-    s = ProductItemSerializer(data=data, context={'request': request})
-    if s.is_valid():
-        s.save(created_by=request.user)
-        return Response({"message": "Product created", "data": s.data}, status=status.HTTP_201_CREATED)
-    return Response({"errors": s.errors}, status=status.HTTP_400_BAD_REQUEST)
+    data = {**request.data.dict(), **request.FILES} if isinstance(request.data, QueryDict) else {**request.data, **request.FILES}
+    data = assign_display_order(ProductItem, data, 'sub_category')
+    serializer = ProductItemSerializer(data=data, context={'request': request})
+    if serializer.is_valid():
+        serializer.save(created_by=request.user)
+        return Response({"message": "Product created", "data": serializer.data}, status=status.HTTP_201_CREATED)
+    return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def product_item_detail(request, id):
@@ -134,14 +138,16 @@ def product_item_detail(request, id):
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
 def product_item_update(request, id):
     obj = get_object_or_404(ProductItem, id=id)
-    data = assign_display_order(ProductItem, request.data, 'sub_category')
-    s = ProductItemSerializer(obj, data=data, partial=True, context={'request': request})
-    if s.is_valid():
-        s.save()
-        return Response({"message": "Product updated", "data": s.data}, status=status.HTTP_200_OK)
-    return Response({"errors": s.errors}, status=status.HTTP_400_BAD_REQUEST)
+    data = {**request.data.dict(), **request.FILES} if isinstance(request.data, QueryDict) else {**request.data, **request.FILES}
+    data = assign_display_order(ProductItem, data, 'sub_category')
+    serializer = ProductItemSerializer(obj, data=data, partial=True, context={'request': request})
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"message": "Product updated", "data": serializer.data}, status=status.HTTP_200_OK)
+    return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
